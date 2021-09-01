@@ -1,0 +1,170 @@
+//Constants.
+//Opcode size.
+OUTER_SET OPCODE_SIZE = 0x30
+
+//Arrays.
+ACTION_DEFINE_ASSOCIATIVE_ARRAY OPCODE_OFFSETS BEGIN
+    "opcode" => 0x00
+    "target" => 0x02
+    "power" => 0x03
+    "parameter1" => 0x04
+    "parameter2" => 0x08
+    "timing" => 0x0c
+    "resist_dispel" => 0x0d
+    "duration" => 0x0e
+    "probability1" => 0x12
+    "probability2" => 0x13
+    "resource" => 0x14
+    "dicenumber" => 0x1c
+    "dicesize" => 0x20
+    "savingthrow" => 0x24
+    "savebonus" => 0x28
+    "special" => 0x2c
+END
+
+
+//Patch functions.
+//Read functions.
+DEFINE_PATCH_FUNCTION GET_OPCODE_FIELD INT_VAR offset = 0 STR_VAR field = "" RET value BEGIN
+    field_offset = $OPCODE_OFFSETS("%field%")
+    //Match on field to decide which read function to use.
+    PATCH_MATCH "%field%" WITH
+        "opcode" BEGIN
+            READ_SHORT (offset + field_offset) value
+        END
+        "resource" BEGIN
+            READ_ASCII (offset + field_offset) value (8) NULL
+        END
+        "target" "power" "timing" "resist_dispel" "probability1" "probability2" BEGIN
+            READ_BYTE (offset + field_offset) value
+        END
+        "parameter1" "parameter2" "duration" "dicenumber" "dicesize" "savingthrow" "savebonus" "special" BEGIN
+            READ_LONG (offset + field_offset) value
+        END
+        DEFAULT
+            PATCH_FAIL "Field '%field%' is not a valid opcode field."
+    END
+END
+
+//Write functions.
+DEFINE_PATCH_FUNCTION SET_OPCODE_FIELD INT_VAR offset = 0 STR_VAR field = "" value = "" BEGIN
+    field_offset = $OPCODE_OFFSETS("%field%")
+    //Match on field to decide which write function to use.
+    PATCH_MATCH "%field%" WITH
+        "opcode" BEGIN
+            WRITE_SHORT (offset + field_offset) value
+        END
+        "resource" BEGIN
+            WRITE_EVALUATED_ASCII (offset + field_offset) ~%value%~ #8
+        END
+        "target" "power" "timing" "resist_dispel" "probability1" "probability2" BEGIN
+            WRITE_BYTE (offset + field_offset) value
+        END
+        "parameter1" "parameter2" "duration" "dicenumber" "dicesize" "savingthrow" "savebonus" "special" BEGIN
+            WRITE_LONG (offset + field_offset) value
+        END
+        DEFAULT
+            PATCH_FAIL "Field '%field%' is not a valid opcode field."
+    END
+END
+
+//Generic comparisons.
+DEFINE_PATCH_FUNCTION MATCH_OPCODE_WITH_ARRAY INT_VAR offset = 0 STR_VAR array = "" RET bool BEGIN
+    //Initialize variables.
+    bool = 1
+    PATCH_TRY
+        //Loop through array.
+        PHP_EACH "%array%" AS field_name => lhs BEGIN
+            //Read value.
+            LPF READ_OPCODE_FIELD INT_VAR offset = offset STR_VAR field = "%field_name%" RET rhs = value END
+            //Compare values as strings.
+            PATCH_IF NOT ("%lhs%" STRING_EQUAL_CASE "%rhs%") BEGIN
+                bool = 0
+                //Leave loop early.
+                PATCH_SILENT
+                PATCH_FAIL "Match failed."
+            END
+        END
+    //Silence error signaling match.
+    WITH ~Failure("Match failed.")~ BEGIN PATCH_VERBOSE END
+    DEFAULT
+        PATCH_RERAISE
+    END
+END
+
+DEFINE_PATCH_FUNCTION MATCH_OPCODE INT_VAR
+    offset = 0
+    opcode = -1
+    target = -1
+    power = -1
+    parameter1 = -1
+    parameter2 = -1
+    timing = -1
+    resist_dispel = -1
+    duration = -1
+    probability1 = -1
+    probability2 = -1
+    dicenumber = -1
+    dicesize = -1
+    savingthrow = -1
+    savebonus = -11
+    special = -1
+STR_VAR
+    resource = "*"
+RET
+    bool
+BEGIN
+    //Initalize variables.
+    DEFINE_ASSOCIATIVE_ARRAY arguments BEGIN END
+    //Make field-by-field comparison.
+    PATCH_IF NOT (opcode = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("opcode") "%opcode%"
+    END
+    PATCH_IF NOT (target = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("target") "%target%"
+    END
+    PATCH_IF NOT (power = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("power") "%power%"
+    END
+    PATCH_IF NOT (parameter1 = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("parameter1") "%parameter1%"
+    END
+    PATCH_IF NOT (parameter2 = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("parameter2") "%parameter2%"
+    END
+    PATCH_IF NOT (timing = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("timing") "%timing%"
+    END
+    PATCH_IF NOT (resist_dispel = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("resist_dispel") "%resist_dispel%"
+    END
+    PATCH_IF NOT (duration = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("duration") "%duration%"
+    END
+    PATCH_IF NOT (probability1 = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("probability1") "%probability1%"
+    END
+    PATCH_IF NOT (probability2 = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("probability2") "%probability2%"
+    END
+    PATCH_IF NOT ("%resource%" STRING_EQUAL_CASE "*") BEGIN
+        TEXT_SPRINT $arguments("resource") "%resource%"
+    END
+    PATCH_IF NOT (dicenumber = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("dicenumber") "%dicenumber%"
+    END
+    PATCH_IF NOT (dicesize = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("dicesize") "%dicesize%"
+    END
+    PATCH_IF NOT (savingthrow = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("savingthrow") "%savingthrow%"
+    END
+    PATCH_IF NOT (savebonus = 0 - 11) BEGIN
+        TEXT_SPRINT $arguments("savebonus") "%savebonus%"
+    END
+    PATCH_IF NOT (special = 0 - 1) BEGIN
+        TEXT_SPRINT $arguments("special") "%special%"
+    END
+    //Match against constructed array.
+    LPF MATCH_OPCODE_WITH_ARRAY INT_VAR offset = offset STR_VAR array = arguments RET bool = bool BEGIN
+END
