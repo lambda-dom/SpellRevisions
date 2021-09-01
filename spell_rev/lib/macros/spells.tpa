@@ -1,0 +1,173 @@
+//Includes.
+//Libraries.
+INCLUDE "%MOD_FOLDER%/lib/macros/opcodes.tpa"
+
+//Constants.
+//Spell size.
+OUTER_SET SPELL_SIZE = 0x72
+
+//Spell header size.
+OUTER_SET SPELL_HEADER_SIZE = 0x28
+
+//Arrays.
+//Spell offsets.
+ACTION_DEFINE_ASSOCIATIVE_ARRAY SPELL_OFFSETS BEGIN
+    "name" => 0x08
+    "sound" => 0x10
+    "flags" => 0x18
+    "type" => 0x1c
+    "exclusion" => 0x1e
+    "animation" => 0x22
+    "school" => 0x25
+    "sectype" => 0x27
+    "level" => 0x34
+    "icon" => 0x3a
+    "descr" => 0x50
+END
+
+ACTION_DEFINE_ASSOCIATIVE_ARRAY SPELL_HEADER_OFFSETS BEGIN
+    "type" => 0x00
+    "flags" => 0x01
+    "location" => 0x02
+    "icon" => 0x04
+    "target" => 0x0c
+    "range" => 0x0e
+    "min_level" => 0x10
+    "speed" => 0x12
+    "projectile" => 0x26
+END
+
+
+//Patch functions.
+//Basic functions.
+DEFINE_PATCH_FUNCTION GET_SPELL_HEADER_COUNT RET count BEGIN
+    READ_SHORT 0x68 count
+END
+
+DEFINE_PATCH_FUNCTION GET_SPELL_HEADERS_OFFSET RET offset BEGIN
+    READ_LONG 0x64 offset
+END
+
+DEFINE_PATCH_FUNCTION GET_SPELL_OPCODES_OFFSET RET offset BEGIN
+    READ_LONG 0x6a offset
+END
+
+DEFINE_PATCH_FUNCTION GET_CASTING_OPCODE_COUNT RET count BEGIN
+    READ_SHORT 0x70 count
+END
+
+//Generic read-write functions.
+DEFINE_PATCH_FUNCTION GET_SPELL_FIELD STR_VAR field = "" RET value BEGIN
+    field_offset = $SPELL_OFFSETS("%field%")
+    //Match on field to decide which read function to use.
+    PATCH_MATCH "%field%" WITH
+        "name" "descr" "flags" "exclusion" "level" BEGIN
+            READ_LONG field_offset value
+        END
+        "type" "animation" BEGIN
+            READ_SHORT field_offset value
+        END
+        "school" "sectype" BEGIN
+            READ_BYTE field_offset value
+        END
+        "sound" "icon" BEGIN
+            READ_ASCII field_offset value (8) NULL
+        END
+        DEFAULT
+            PATCH_FAIL "Field '%field%' is not a valid spell field."
+    END
+END
+
+DEFINE_PATCH_FUNCTION SET_SPELL_FIELD STR_VAR field = "" value = "" BEGIN
+    field_offset = $SPELL_OFFSETS("%field%")
+    //Match on field to decide which read function to use.
+    PATCH_MATCH "%field%" WITH
+        "name" "descr" "flags" "exclusion" "level" BEGIN
+            WRITE_LONG field_offset value
+        END
+        "type" "animation" BEGIN
+            WRITE_SHORT field_offset value
+        END
+        "school" "sectype" BEGIN
+            WRITE_BYTE field_offset value
+        END
+        "sound" "icon" BEGIN
+            WRITE_EVALUATED_ASCII field_offset "%value%" #8
+        END
+        DEFAULT
+            PATCH_FAIL "Field '%field%' is not a valid spell field."
+    END
+END
+
+//Spell header functions.
+DEFINE_PATCH_FUNCTION GET_SPELL_HEADER_OFFSET INT_VAR header = 0 RET offset BEGIN
+    LPF GET_SPELL_HEADER_COUNT RET headers_count = count END
+    LPF GET_SPELL_HEADERS_OFFSET RET headers_offset = offset END
+    PATCH_IF (0 <= header ) AND (header < headers_count) BEGIN
+        offset = headers_offset + (header * SPELL_HEADER_SIZE)
+    END ELSE BEGIN
+        PATCH_FAIL "Header %header% out of bounds."
+    END
+END
+
+DEFINE_PATCH_FUNCTION GET_SPELL_HEADER_FIELD INT_VAR header = 0 STR_VAR field = "" RET value BEGIN
+    //Get header and field offsets. PATCH_FAIL's here if header out of bounds.
+    LPF GET_SPELL_HEADER_OFFSET INT_VAR header = header RET header_offset = offset END
+    field_offset = $SPELL_HEADER_OFFSETS("%field%")
+    //Match on field to select read function to use.
+    PATCH_MATCH "%field%" WITH
+        "type" "flags" "target" BEGIN
+            READ_BYTE (header_offset + field_offset) value
+        END
+        "location" "range" "min_level" "speed" "projectile" BEGIN
+            READ_SHORT (header_offset + field_offset) value
+        END
+        "icon" BEGIN
+            READ_ASCII (header_offset + field_offset) value (8) NULL
+        END
+        DEFAULT
+            PATCH_FAIL "Field '%field%' not a valid spell header field."
+    END
+END
+
+DEFINE_PATCH_FUNCTION SET_SPELL_HEADER_FIELD INT_VAR header = 0 STR_VAR field = "" value = "" BEGIN
+    //Get header and field offsets. PATCH_FAIL's here if header out of bounds.
+    LPF GET_SPELL_HEADER_OFFSET INT_VAR header = header RET header_offset = offset END
+    field_offset = $SPELL_HEADER_OFFSETS("%field%")
+    //Match on field to select write function to use.
+    PATCH_MATCH "%field%" WITH
+        "type" "flags" "target" BEGIN
+            WRITE_BYTE (header_offset + field_offset) value
+        END
+        "location" "range" "min_level" "speed" "projectile" BEGIN
+            WRITE_SHORT (header_offset + field_offset) value
+        END
+        "icon" BEGIN
+            WRITE_EVALUATED_ASCII (header_offset + field_offset) "%value%" #8
+        END
+        DEFAULT
+            PATCH_FAIL "Field '%field%' not a valid spell header field."
+    END
+END
+
+//Header opcode functions.
+DEFINE_PATCH_FUNCTION GET_SPELL_HEADER_OPCODE_COUNT INT_VAR header = 0 RET count BEGIN
+    //Get header offset. PATCH_FAIL's here if header out of bounds.
+    LPF GET_SPELL_HEADER_OFFSET INT_VAR header = header RET header_offset = offset END
+    //Read from opcode count field.
+    READ_SHORT (header_offset + 0x1e) count
+END
+
+DEFINE_PATCH_FUNCTION GET_SPELL_HEADER_OPCODE_OFFSET INT_VAR header = 0 index = 0 RET offset BEGIN
+    //Get header offset. PATCH_FAIL's here if header out of bounds.
+    LPF GET_SPELL_HEADER_OFFSET INT_VAR header = header RET header_offset = offset END
+    LPF GET_SPELL_HEADER_OPCODE_COUNT INT_VAR header = header RET op_count = count END
+    PATCH_IF (0 <= index) AND (index < op_count) BEGIN
+        LPF GET_SPELL_OPCODES_OFFSET RET op_start = offset END
+        //Read from opcode index field.
+        READ_SHORT (header_offset + 0x20) op_index
+        offset = op_start + (op_index + index) * OPCODE_SIZE
+    END ELSE BEGIN
+        PATCH_FAIL "Opcode %index% out of bounds."
+    END
+END

@@ -55,7 +55,7 @@ DEFINE_PATCH_FUNCTION SET_OPCODE_FIELD INT_VAR offset = 0 STR_VAR field = "" val
             WRITE_SHORT (offset + field_offset) value
         END
         "resource" BEGIN
-            WRITE_EVALUATED_ASCII (offset + field_offset) ~%value%~ #8
+            WRITE_EVALUATED_ASCII (offset + field_offset) "%value%" #8
         END
         "target" "power" "timing" "resist_dispel" "probability1" "probability2" BEGIN
             WRITE_BYTE (offset + field_offset) value
