@@ -23,7 +23,7 @@ Array of spell offsets.
 Array of spell header offsets. The field names are the same as in WeiDU macros like ALTER_SPELL_HEADER.
 
 note(s):
-* these two arrays do *not* contain fields, like the offset of the opcodes block, that should not be messed with directly. To get their values use the functions.
+* these two arrays do *not* contain fields, like the offset of the opcodes block, that should not be messed with directly. To get their values use the functions below.
 
 ## B. Spell functions.
 
@@ -46,7 +46,7 @@ Return offset of the spell headers block.
 Return offset of the spell opcodes block.
 
 note(s):
-* due to the way the opcode block is organized this is the same as the offset of the first casting opcode.
+* due to the way the opcode block is organized this is the same as the offset of the casting opcode block.
 
 `GET_CASTING_OPCODE_COUNT RET count`
 
@@ -90,3 +90,10 @@ Return the number of opcodes of header. Function PATCH_FAIL's if header out of b
 Return offset of index opcode (0-indexed) of header. If any of index or header are out of bounds, function PATCH_FAIL's.
 
 ### B. 5. Search functions.
+
+### B. 6. Adding and removing spell headers.
+
+For patching a spell header, the function `ALTER_SPELL_HEADER` is enough for most purposes and in the case where the input data is in an associative array, you can use `SET_SPELL_HEADER_FIELD`. As of the current WeiDU v247 however, `DELETE_SPELL_HEADER` seems to be bugged and there is no convenient way to add new spell headers.
+
+note(s):
+* the functionality of this pair of functions can also be found in the file lib/macros.tpa.
